@@ -2,6 +2,7 @@ from dash import Dash, html, dash_table, dcc
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objs as go
+import os
 
 app = Dash()
 
@@ -57,4 +58,5 @@ app.layout = [
 ]
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(debug=True, port=port, host="0.0.0.0")
