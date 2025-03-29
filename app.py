@@ -1,5 +1,5 @@
 import dash
-from dash import Dash, html, dcc, Input, Output
+from dash import Dash, html, dcc, Input, Output, State
 import pandas as pd
 import plotly.graph_objs as go
 import os
@@ -25,12 +25,33 @@ app.index_string = '''
                 font-family: 'Inter', sans-serif;
                 margin: 0;
                 padding: 0;
+                display: flex;
+                flex-direction: column;
+                min-height: 100vh;
+            }
+            
+            main {
+                flex: 1;
+            }
+            
+            .dashboard-footer {
+                background-color: #192A37;
+                color: #FEF7EB;
+                padding: 30px 0;
+                margin-top: 40px;
+                width: 100%;
             }
         </style>
     </head>
     <body>
-        {%app_entry%}
-        <footer>
+        <main>
+            {%app_entry%}
+        </main>
+        <footer class="dashboard-footer">
+            <div style="max-width: 1200px; margin: 0 auto; padding: 0 20px;">
+                <p style="margin: 0;">Data source: The Washington Post's database of fatal police shootings.</p>
+                <p style="margin-top: 10px;">© 2025 Police Shootings Dashboard</p>
+            </div>
             {%config%}
             {%scripts%}
             {%renderer%}
@@ -39,74 +60,118 @@ app.index_string = '''
 </html>
 '''
 
-# Load data
+# Load and preprocess
 police_killings_df = pd.read_csv("PoliceKillingsUS.csv", encoding="cp1252")
 police_killings_df['date'] = pd.to_datetime(police_killings_df['date'])
 
-race_labels = {
-    'W': 'White',
-    'B': 'Black',
-    'A': 'Asian',
-    'H': 'Hispanic',
-    'N': 'Native American',
-    'O': 'Other',
-    '': 'Unknown'
-}
+race_labels = {'W': 'White', 'B': 'Black', 'A': 'Asian', 'H': 'Hispanic', 'N': 'Native American', 'O': 'Other', '': 'Unknown'}
 police_killings_df['race_full'] = police_killings_df['race'].map(race_labels)
 
-# App Layout
+state_name_map = {
+    'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
+    'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
+    'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
+    'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
+    'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+    'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
+    'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+    'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+    'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+    'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+    'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
+    'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
+    'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'District of Columbia'
+}
+
+# Layout
 app.layout = html.Div([
     dcc.Store(id='filtered-data', data=police_killings_df.to_json(date_format='iso', orient='split')),
 
-    html.H1("Police Shootings USA", style={"paddingLeft": "10vw"}),
-
-    # Filter bar with dropdowns and reset
     html.Div([
-        dcc.Dropdown(
-            id='weapon-dropdown',
-            options=[{'label': w, 'value': w} for w in sorted(police_killings_df['armed'].dropna().unique())],
-            placeholder="Select weapon",
-            style={"width": "200px", "marginRight": "10px"}
-        ),
-        dcc.Dropdown(
-            id='gender-dropdown',
-            options=[{'label': g, 'value': g} for g in sorted(police_killings_df['gender'].dropna().unique())],
-            placeholder="Select gender",
-            style={"width": "150px", "marginRight": "10px"}
-        ),
-        dcc.Dropdown(
-            id='manner-dropdown',
-            options=[{'label': m, 'value': m} for m in sorted(police_killings_df['manner_of_death'].dropna().unique())],
-            placeholder="Select manner of death",
-            style={"width": "250px", "marginRight": "10px"}
-        ),
-        html.Button("Reset Filters", id="reset-button", n_clicks=0, style={
-            "fontSize": "16px", "padding": "10px 20px",
-            "borderRadius": "8px", "border": "1px solid #943232",
-            "backgroundColor": "#943232", "color": "white",
-            "cursor": "pointer"
-        })
-    ], style={"display": "flex", "justifyContent": "center", "alignItems": "center", "margin": "20px"}),
+        html.H1("Police Shootings USA", style={"marginBottom": "10px"}),
 
-    # Charts Section
+        html.Div([
+            dcc.Dropdown(
+                id='weapon-dropdown',
+                options=[{'label': w, 'value': w} for w in sorted(police_killings_df['armed'].dropna().unique())],
+                placeholder="Select victim weapon",
+                style={"width": "200px", "marginRight": "10px"}
+            ),
+            dcc.Dropdown(
+                id='gender-dropdown',
+                options=[{'label': g, 'value': g} for g in sorted(police_killings_df['gender'].dropna().unique())],
+                placeholder="Select gender",
+                style={"width": "150px", "marginRight": "10px"}
+            ),
+            dcc.Dropdown(
+                id='manner-dropdown',
+                options=[{'label': m, 'value': m} for m in sorted(police_killings_df['manner_of_death'].dropna().unique())],
+                placeholder="Select manner of death",
+                style={"width": "250px", "marginRight": "10px"}
+            ),
+            dcc.Dropdown(
+                id='income-sort',
+                options=[
+                    {'label': 'Lowest Income States', 'value': 'lowest'},
+                    {'label': 'Highest Income States', 'value': 'highest'}
+                ],
+                value='lowest',
+                clearable=False,
+                style={"width": "230px", "marginRight": "10px"}
+            ),
+            html.Button("Reset Filters", id="reset-button", n_clicks=0, style={
+                "fontSize": "16px", "padding": "10px 20px",
+                "borderRadius": "8px", "border": "1px solid #943232",
+                "backgroundColor": "#943232", "color": "white",
+                "cursor": "pointer"
+            })
+        ], style={"display": "flex", "flexWrap": "wrap", "alignItems": "center", "marginBottom": "20px"})
+    ], style={"maxWidth": "1200px", "margin": "0 auto", "padding": "0 20px"}),
+
     html.Div([
         html.Div([
             dcc.Graph(id="police-killings-map", style={"height": "600px"}),
             html.P(
-                "This dashboard visualizes data from Kaggle’s “Fatal Police Shootings in the US” dataset, which compiles information on individuals fatally shot by police officers in the United States since January 1, 2015. The data originates from The Washington Post's ongoing database of fatal police shootings. The dataset includes details such as the individual's name, age, gender, race, the date and location of the incident, whether the individual was armed, and the manner of death. By interacting with this dashboard, you can explore patterns and trends across different demographics and regions, aiming to foster a deeper understanding of these incidents and support informed discussions on law enforcement practices and policies.",
+                "This dashboard visualizes data from Kaggle's \"Fatal Police Shootings in the US\" dataset, which compiles information "
+                "on individuals fatally shot by police officers in the United States since January 1, 2015. The data originates from "
+                "The Washington Post's ongoing database of fatal police shootings. The dataset includes details such as the individual's "
+                "name, age, gender, race, the date and location of the incident, whether the individual was armed, and the manner of death. "
+                "By interacting with this dashboard, you can explore patterns and trends across different demographics and regions, aiming "
+                "to foster a deeper understanding of these incidents and support informed discussions on law enforcement practices and policies.",
                 style={"textAlign": "justify", "marginTop": "20px", "fontSize": "16px", "lineHeight": "1.6"}
             ),
-        ], style={"width": "40vw", "padding": "0 5vw", "display": "flex", "flexDirection": "column", "alignItems": "center"}),
+        ], style={"width": "48%", "paddingRight": "2%"}),
 
         html.Div([
             dcc.Graph(id="victim-race-pie"),
-            dcc.Graph(id="shootings-over-time", style={"marginTop": "30px"})
-        ], style={"width": "40vw", "padding": "0 5vw", "display": "flex", "flexDirection": "column", "alignItems": "center"})
-    ], style={"display": "flex", "flexDirection": "row", "justifyContent": "space-between"})
-], style={"fontFamily": "'Inter', sans-serif", "backgroundColor": "#FEF7EB", "paddingTop": "30px"})
+            html.Div([
+                dcc.Graph(id="income-bar-chart", style={"marginTop": "30px"}),
+                html.Div([
+                    html.Button("Previous", id="prev-page", n_clicks=0, style={
+                        "fontSize": "14px", "padding": "8px 16px",
+                        "borderRadius": "4px", "border": "1px solid #943232",
+                        "backgroundColor": "#943232", "color": "white",
+                        "cursor": "pointer", "marginRight": "10px"
+                    }),
+                    html.Span(id="page-display", style={
+                        "fontSize": "14px", "padding": "8px 16px",
+                    }),
+                    html.Button("Next", id="next-page", n_clicks=0, style={
+                        "fontSize": "14px", "padding": "8px 16px",
+                        "borderRadius": "4px", "border": "1px solid #943232",
+                        "backgroundColor": "#943232", "color": "white",
+                        "cursor": "pointer", "marginLeft": "10px"
+                    }),
+                ], style={"display": "flex", "justifyContent": "center", "alignItems": "center", "marginTop": "15px"})
+            ]),
+            dcc.Store(id='income-data', data={}),
+            dcc.Store(id='current-page', data=1)
+        ], style={"width": "48%"})
+    ], style={"maxWidth": "1200px", "margin": "0 auto", "display": "flex", "gap": "4%", "padding": "0 20px"})
+], style={"fontFamily": "'Inter', sans-serif", "backgroundColor": "#FEF7EB", "paddingTop": "30px", "paddingBottom": "40px"})
 
 
-# Callback to filter data based on user interaction
+# Callbacks
 @app.callback(
     Output('filtered-data', 'data'),
     Input('police-killings-map', 'clickData'),
@@ -145,13 +210,12 @@ def filter_data(map_click, pie_click, weapon, gender, manner, reset_clicks):
     return df.to_json(date_format='iso', orient='split')
 
 
-# Update the choropleth map
 @app.callback(
     Output('police-killings-map', 'figure'),
     Input('filtered-data', 'data')
 )
 def update_map(json_data):
-    df = pd.read_json(json_data, orient='split') if json_data else police_killings_df
+    df = pd.read_json(json_data, orient='split')
     state_killings_df = df.groupby("state").size().reset_index(name="count")
     fig = go.Figure(go.Choropleth(
         locations=state_killings_df["state"],
@@ -164,7 +228,8 @@ def update_map(json_data):
     ))
     fig.update_layout(
         title_text="Shootings by State", title_x=0.5,
-        geo=dict(scope="usa", projection=dict(type="albers usa"), showland=True, landcolor="#FEF7EB", bgcolor="#FEF7EB"),
+        geo=dict(scope="usa", projection=dict(type="albers usa"),
+                 showland=True, landcolor="#FEF7EB", bgcolor="#FEF7EB"),
         height=600, margin=dict(r=0, t=50, l=0, b=0),
         paper_bgcolor="#FEF7EB", plot_bgcolor="#FEF7EB",
         font=dict(family="Inter, sans-serif", color="#192A37")
@@ -172,13 +237,12 @@ def update_map(json_data):
     return fig
 
 
-# Update the pie chart
 @app.callback(
     Output('victim-race-pie', 'figure'),
     Input('filtered-data', 'data')
 )
 def update_pie(json_data):
-    df = pd.read_json(json_data, orient='split') if json_data else police_killings_df
+    df = pd.read_json(json_data, orient='split')
     race_counts = df['race_full'].value_counts().reset_index()
     race_counts.columns = ['race', 'count']
     fig = go.Figure(go.Pie(
@@ -195,37 +259,112 @@ def update_pie(json_data):
     return fig
 
 
-# Update the line chart
 @app.callback(
-    Output('shootings-over-time', 'figure'),
-    Input('filtered-data', 'data')
+    Output('income-data', 'data'),
+    Input('income-sort', 'value')
 )
-def update_line(json_data):
-    df = pd.read_json(json_data, orient='split') if json_data else police_killings_df
-    shootings_over_time = df.groupby(df['date'].dt.to_period('M')).size()
-    shootings_over_time.index = shootings_over_time.index.to_timestamp()
-    min_point = shootings_over_time.idxmin()
-    max_point = shootings_over_time.idxmax()
+def prepare_income_data(sort_value):
+    income_df = pd.read_csv("MedianHouseholdIncome2015.csv", encoding="cp1252")
+    income_df.rename(columns={"Geographic Area": "state", "Median Income": "median_income"}, inplace=True)
 
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=shootings_over_time.index, y=shootings_over_time.values,
-                             mode='lines+markers', line=dict(color='#943232')))
-    fig.add_trace(go.Scatter(x=[min_point], y=[shootings_over_time[min_point]],
-                             mode='markers+text', text=[f"Min: {shootings_over_time[min_point]}"],
-                             textposition="bottom right", marker=dict(color='blue', size=10), showlegend=False))
-    fig.add_trace(go.Scatter(x=[max_point], y=[shootings_over_time[max_point]],
-                             mode='markers+text', text=[f"Max: {shootings_over_time[max_point]}"],
-                             textposition="top left", marker=dict(color='red', size=10), showlegend=False))
-    fig.update_layout(
-        title_text="Shootings Over Time", title_x=0.5,
-        xaxis_title="Date", yaxis_title="Number of Shootings",
-        paper_bgcolor="#FEF7EB", plot_bgcolor="#FEF7EB",
-        font=dict(family="Inter, sans-serif", color="#192A37")
+    income_df["median_income"] = (
+        income_df["median_income"]
+        .astype(str)
+        .str.replace(",", "", regex=False)
+        .str.extract(r'(\d+)', expand=False)
+        .astype(float)
     )
+
+    grouped = income_df.groupby("state")["median_income"].mean().reset_index()
+    grouped["state_full"] = grouped["state"].map(state_name_map)
+    
+    # Sort all states
+    if sort_value == "lowest":
+        grouped = grouped.sort_values("median_income")
+    else:
+        grouped = grouped.sort_values("median_income", ascending=False)
+    
+    return grouped.to_json(orient='split')
+
+
+@app.callback(
+    [Output('current-page', 'data'),
+     Output('page-display', 'children')],
+    [Input('prev-page', 'n_clicks'),
+     Input('next-page', 'n_clicks'),
+     Input('income-sort', 'value')],
+    [State('current-page', 'data'),
+     State('income-data', 'data')]
+)
+def update_page(prev_clicks, next_clicks, sort_value, current_page, json_data):
+    ctx = dash.callback_context
+    triggered = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
+    
+    if triggered == 'income-sort':
+        current_page = 1
+    elif triggered == 'prev-page' and current_page > 1:
+        current_page -= 1
+    elif triggered == 'next-page':
+        # Get total pages based on data
+        if json_data:
+            df = pd.read_json(json_data, orient='split')
+            total_pages = (len(df) + 7) // 8  # Ceiling division for total pages
+            if current_page < total_pages:
+                current_page += 1
+    
+    if json_data:
+        df = pd.read_json(json_data, orient='split')
+        total_pages = (len(df) + 7) // 8
+        page_display = f"Page {current_page} of {total_pages}"
+    else:
+        page_display = f"Page {current_page}"
+        
+    return current_page, page_display
+
+
+@app.callback(
+    Output('income-bar-chart', 'figure'),
+    [Input('income-data', 'data'),
+     Input('current-page', 'data'),
+     Input('income-sort', 'value')]
+)
+def update_income_chart(json_data, page, sort_value):
+    if not json_data:
+        return go.Figure()
+    
+    grouped = pd.read_json(json_data, orient='split')
+    
+    # Pagination: select 8 states for the current page
+    start_idx = (page - 1) * 8
+    end_idx = start_idx + 8
+    page_data = grouped.iloc[start_idx:end_idx]
+    
+    # Set title based on sort selection
+    if sort_value == "lowest":
+        title = f"States with Lowest Median Household Income (Page {page})"
+    else:
+        title = f"States with Highest Median Household Income (Page {page})"
+
+    fig = go.Figure(go.Bar(
+        x=page_data["median_income"],
+        y=page_data["state_full"],
+        orientation="h",
+        marker_color="#943232"
+    ))
+
+    fig.update_layout(
+        title_text=title,
+        xaxis_title="Median Household Income (USD)",
+        yaxis_title="State",
+        paper_bgcolor="#FEF7EB",
+        plot_bgcolor="#FEF7EB",
+        font=dict(family="Inter, sans-serif", color="#192A37"),
+        margin=dict(t=50, l=80, r=30, b=40)
+    )
+
     return fig
 
 
-# Run the server
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 3000))
     app.run(debug=True, port=port, host="127.0.0.1")
