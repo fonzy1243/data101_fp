@@ -1,0 +1,22 @@
+
+/* Hide Dash default loading message */
+._dash-loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #fef7eb;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Inter', sans-serif;
+    font-size: 18px;
+    color: #943232;
+    z-index: 9999;
+}
+
+@keyframes fadeBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
